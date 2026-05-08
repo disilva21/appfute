@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "271312927922",
+    "project_id": "futvarzea-3702c",
+    "storage_bucket": "futvarzea-3702c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:271312927922:android:fe31c24f43f23d64fd5dab",
+        "android_client_info": {
+          "package_name": "com.ebeltec.appfute"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBdxxdrYjOXLDjSSfqw7oCZ_scpc1w0eKs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

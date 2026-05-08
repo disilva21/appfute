@@ -1,0 +1,7 @@
+{
+    "git.ignoreLimitWarning": true,
+    "editor.formatOnSave": true,
+    "editor.formatOnPaste": true,
+    "dart.lineLength": 200,
+    "cmake.sourceDirectory": "C:/projetos/ranking_geogame/windows"
+}
