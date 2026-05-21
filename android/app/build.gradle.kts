@@ -1,18 +1,18 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
-    // START: FlutterFire Configuration
     id("com.google.gms.google-services")
-    // END: FlutterFire Configuration
     id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-def keystoreProperties = new Properties()
-def keystorePropertiesFile = rootProject.file("key.properties")
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
 if (keystorePropertiesFile.exists()) {
-    keystorePropertiesFile.withReader("UTF-8") { reader ->
-        keystoreProperties.load(reader)
+    keystorePropertiesFile.inputStream().use { stream ->
+        keystoreProperties.load(stream)
     }
 }
 
@@ -31,10 +31,7 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.ebeltec.appfute"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -42,21 +39,28 @@ android {
     }
 
     signingConfigs {
-        release {
-            keyAlias = keystoreProperties['keyAlias']
-            keyPassword = keystoreProperties['keyPassword']
-            storeFile = keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
-            storePassword = keystoreProperties['storePassword']
+        // Usamos 'getByName("debug")' ou 'debug' para configurar o padrão
+        // E 'create("release")' para o novo
+        create("release") {
+            if (keystoreProperties.isEmpty) {
+                // Prevenção opcional: evita erro se o arquivo sumir
+                println("AVISO: key.properties não encontrado ou vazio!")
+            } else {
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+            }
         }
     }
 
     buildTypes {
-        release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            //signingConfig = signingConfigs.getByName("debug")
-            signingConfig = signingConfigs.debug
-            signingConfig = signingConfigs.release
+        getByName("release") {
+            // Aqui garantimos que ele use a configuração de assinatura que criamos acima
+            signingConfig = signingConfigs.getByName("release")
+            
+            isMinifyEnabled = false // Geralmente padrão no Flutter, ajuste se necessário
+            isShrinkResources = false
         }
     }
 }

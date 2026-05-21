@@ -1,3 +1,8 @@
+import 'package:appfute/gerenciar_jogador.dart';
+import 'package:appfute/meus_times.dart';
+import 'package:appfute/upgrade_page.dart';
+import 'package:appfute/upload_service.dart';
+import 'package:appfute/widgets/version_app.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -8,273 +13,261 @@ import 'package:appfute/main.dart';
 import 'package:appfute/widgets/uppercase.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-class CustomDrawer extends StatelessWidget {
+class CustomDrawer extends StatefulWidget {
   final String orgIdAtual;
 
   const CustomDrawer({super.key, required this.orgIdAtual});
 
   @override
+  State<CustomDrawer> createState() => _CustomDrawerState();
+}
+
+class _CustomDrawerState extends State<CustomDrawer> {
+  bool _carregandoImagem = false;
+  final UploadService _uploadService = UploadService();
+
+  void _atualizarEscudo() async {
+    setState(() => _carregandoImagem = true);
+
+    // Geramos um ID temporário ou usamos o ID do time se já existir
+    String idTemporarioTime = DateTime.now().millisecondsSinceEpoch.toString();
+
+    await _uploadService.selecionarEUpload(pasta: 'perfil', idDocumento: idTemporarioTime);
+
+    setState(() => _carregandoImagem = false);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
+    bool isAdmin = false;
 
     return Drawer(
-      backgroundColor: Colors.grey[900],
-      child: Column(
-        children: [
-          // 1. Cabeçalho com dados do Usuário (da coleção raiz 'jogadores')
-          FutureBuilder<DocumentSnapshot>(
-            future: FirebaseFirestore.instance.collection('jogadores').doc(user?.uid).get(),
-            builder: (context, snapshot) {
-              String nome = "Jogador";
-              String email = user?.email ?? "";
+      backgroundColor: const Color.fromARGB(255, 22, 66, 24),
+      child: FutureBuilder<DocumentSnapshot>(
+        future: FirebaseFirestore.instance.collection('jogadores').doc(user?.uid).get(),
+        builder: (context, snapshot) {
+          // Enquanto carrega, podemos mostrar um loading ou o header vazio
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
-              if (snapshot.hasData && snapshot.data!.exists) {
-                nome = snapshot.data!['nome'];
-              }
+          // 1. Pegamos os dados como um Mapa
+          final dados = snapshot.data!.data() as Map<String, dynamic>?;
 
-              return UserAccountsDrawerHeader(
+          // 2. Verificamos se o mapa contém a chave e se o valor é true
+          if (dados != null && dados.containsKey('is_admin')) {
+            isAdmin = dados['is_admin'] == true;
+          } else {
+            isAdmin = false; // Se o campo não existe, ele definitivamente não é admin
+          }
+          final nome = dados!['nome'] ?? "Jogador";
+          final email = dados['email'] ?? "Sem email";
+          String? urlFotoPerfil = dados['urlFotoPerfil'] ?? null;
+
+          return Column(
+            children: [
+              // 1. Cabeçalho com dados do Usuário (da coleção raiz 'jogadores')
+              UserAccountsDrawerHeader(
                 decoration: BoxDecoration(color: Colors.green[900]),
-                currentAccountPicture: CircleAvatar(
-                  backgroundColor: Colors.yellow[700],
-                  child: Text(nome[0], style: const TextStyle(fontSize: 30, color: Colors.black)),
+                currentAccountPicture: GestureDetector(
+                  onTap: _carregandoImagem ? null : _atualizarEscudo,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      CircleAvatar(
+                        radius: 60,
+                        backgroundColor: Colors.grey[200],
+                        backgroundImage: urlFotoPerfil != null ? NetworkImage(urlFotoPerfil) : null,
+                        child: urlFotoPerfil == null ? const Icon(Icons.shield, size: 50, color: Colors.grey) : null,
+                      ),
+                      if (_carregandoImagem)
+                        const CircleAvatar(
+                          radius: 60,
+                          backgroundColor: Colors.black45,
+                          child: CircularProgressIndicator(color: Colors.white),
+                        ),
+                      if (!_carregandoImagem)
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: CircleAvatar(
+                            radius: 12,
+                            backgroundColor: Theme.of(context).primaryColor,
+                            child: const Icon(Icons.camera_alt, size: 12, color: Colors.white),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-                accountName: Text(nome, style: GoogleFonts.bebasNeue(fontSize: 20)),
+
+                accountName: Text(nome, style: GoogleFonts.bebasNeue(fontSize: 16)),
                 accountEmail: Text(email),
-              );
-            },
-          ),
+              ),
 
-          // 2. Título da seção de times
-          Padding(
-            padding: const EdgeInsets.all(15.0),
-            child: Text(
-              "MEUS TIMES",
-              style: TextStyle(color: Colors.yellow[700], fontWeight: FontWeight.bold, letterSpacing: 1.2),
-            ),
-          ),
+              _buildMenuAction(
+                icon: Icons.shield_rounded,
+                title: "Meus Times",
+                onTap: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => MeusTimesPage(orgIdAtual: widget.orgIdAtual)));
+                },
+              ),
 
-          // 3. Lista de Organizações (do users_lookup)
-          // 3. Lista de Organizações (do users_lookup)
-          Expanded(
-            child: FutureBuilder<DocumentSnapshot>(
-              // Buscamos o documento que contém a lista de IDs de times do usuário
-              future: FirebaseFirestore.instance.collection('users_lookup').doc(user?.uid).get(),
-              builder: (context, lookupSnap) {
-                if (lookupSnap.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+              const Divider(color: Colors.white24),
 
-                if (!lookupSnap.hasData || !lookupSnap.data!.exists) {
-                  return const Center(
-                    child: Text("Nenhum time encontrado", style: TextStyle(color: Colors.white54)),
-                  );
-                }
+              _buildMenuAction(
+                icon: Icons.sports_soccer_rounded,
+                title: "Artilharia do Time",
+                onTap: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => ArtilhariaPage(orgId: widget.orgIdAtual)));
+                },
+              ),
 
-                // Pegamos a lista de IDs (ex: ["ABC123", "XYZ456"])
-                List<dynamic> orgsIds = lookupSnap.data!['organizacoes'] ?? [];
+              const Divider(color: Colors.white24),
+              _buildMenuAction(icon: Icons.update_rounded, title: "Mudar Minha Posição", onTap: () => _abrirDialogoTrocarPosicao(context)),
 
-                // Agora usamos o ListView.builder para criar uma linha para cada ID da lista
-                return ListView.builder(
-                  padding: EdgeInsets.zero,
-                  itemCount: orgsIds.length,
-                  itemBuilder: (context, index) {
-                    // AQUI CRIAMOS AS VARIÁVEIS PARA CADA ITEM DA LISTA
-                    String idTime = orgsIds[index];
-                    bool isAtual = idTime == orgIdAtual;
+              if (isAdmin == true) const Divider(color: Colors.white24),
+              if (isAdmin == true) _buildMenuAction(icon: Icons.calendar_month_outlined, title: "Agendar Janela da Lista", onTap: () => _configurarJanelaRecorrente(context)),
 
-                    return FutureBuilder<DocumentSnapshot>(
-                      future: FirebaseFirestore.instance.collection('organizacoes').doc(idTime).get(),
-                      builder: (context, orgSnap) {
-                        if (!orgSnap.hasData) return const SizedBox();
+              if (isAdmin == true) const Divider(color: Colors.white24),
+              if (isAdmin == true) _buildMenuAction(icon: Icons.confirmation_number_outlined, title: "Definir Vagas da Partida", onTap: () => _mostrarAjusteVagas(context)),
 
-                        String nomeTime = orgSnap.data!['nome'] ?? "Time sem nome";
-
-                        return FutureBuilder<DocumentSnapshot>(
-                          future: FirebaseFirestore.instance.collection('organizacoes').doc(idTime).collection('jogadores').doc(user?.uid).get(),
-                          builder: (context, statsSnap) {
-                            int gols = 0;
-                            String posicao = "Jogador";
-                            if (statsSnap.hasData && statsSnap.data!.exists) {
-                              gols = statsSnap.data!['gols_carreira'] ?? 0;
-                              posicao = statsSnap.data!['posicao'] ?? "Jogador";
-                            }
-
-                            return ListTile(
-                              leading: Icon(Icons.sports_soccer, color: isAtual ? Colors.yellow[700] : Colors.white54),
-                              title: Text(
-                                nomeTime,
-                                style: TextStyle(color: isAtual ? Colors.white : Colors.white54, fontWeight: isAtual ? FontWeight.bold : FontWeight.normal),
-                              ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Icon(Icons.person, size: 12, color: isAtual ? Colors.yellow[700] : Colors.white38),
-                                      const SizedBox(width: 4),
-                                      Text(posicao, style: TextStyle(color: isAtual ? Colors.white70 : Colors.white38, fontSize: 12)),
-                                    ],
-                                  ),
-                                  Row(
-                                    children: [
-                                      Icon(Icons.star, size: 12, color: Colors.yellow[700]),
-                                      const SizedBox(width: 4),
-                                      Text("$gols Gols", style: TextStyle(color: isAtual ? Colors.yellow[700] : Colors.white38, fontSize: 12)),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                              trailing: IconButton(
-                                icon: Icon(Icons.share, color: Colors.yellow[700], size: 20),
-                                onPressed: () => _mostrarModalCompartilhar(context, nomeTime, idTime),
-                              ),
-                              onTap: isAtual ? null : () => _alternarTime(context, idTime),
-                            );
-                          },
-                        );
-                      },
-                    );
+              if (isAdmin == true) const Divider(color: Colors.white24),
+              if (isAdmin == true)
+                _buildMenuAction(
+                  icon: Icons.rocket_launch,
+                  title: "Fazer Upgrade do Time",
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => UpgradePage(orgId: widget.orgIdAtual)));
                   },
-                );
-              },
-            ),
+                ),
+
+              if (isAdmin == true) const Divider(color: Colors.white24),
+              if (isAdmin == true)
+                _buildMenuAction(
+                  icon: Icons.group_remove,
+                  title: "Gerenciar Atletas",
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => GerenciarJogadoresPage(orgId: widget.orgIdAtual)));
+                  },
+                ),
+              // Dentro da Column do seu CustomDrawer
+              const Divider(color: Colors.white24),
+
+              _buildMenuAction(
+                icon: Icons.add,
+                title: "Entrar em  novo Time",
+                onTap: () {
+                  _mostrarDialogoEntrarTime(context);
+                },
+              ),
+
+              // Menus de Ação
+              const Divider(color: Colors.white24),
+
+              // 4. Opções de Ação
+              ListTile(
+                leading: const Icon(Icons.logout, color: Colors.redAccent),
+                title: const Text("Sair do App", style: TextStyle(color: Colors.redAccent)),
+                onTap: () async {
+                  await FirebaseAuth.instance.signOut();
+                  if (context.mounted) {
+                    Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (context) => LoginPage()), (route) => false);
+                  }
+                },
+              ),
+
+              const Divider(color: Colors.white24),
+              const Padding(padding: EdgeInsets.only(bottom: 5.0), child: VersaoDoAppWidget()),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _mostrarAjusteVagas(BuildContext context) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: Text("VAGAS DA LISTA", style: GoogleFonts.bebasNeue(color: Colors.white)),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(
+            hintText: "Ex: 20",
+            hintStyle: TextStyle(color: Colors.white30),
+            labelText: "Máximo de Confirmados",
+            labelStyle: TextStyle(color: Colors.yellow),
           ),
-
-          const Divider(color: Colors.white24),
-
-          _buildMenuAction(
-            icon: Icons.format_list_numbered_outlined,
-            title: "Artilharia do Time",
-            onTap: () {
-              Navigator.push(context, MaterialPageRoute(builder: (context) => ArtilhariaPage(orgId: orgIdAtual)));
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCELAR")),
+          ElevatedButton(
+            onPressed: () async {
+              int novasVagas = int.tryParse(controller.text) ?? 20;
+              await FirebaseFirestore.instance.collection('organizacoes').doc(widget.orgIdAtual).update({'vagas_partida': novasVagas});
+              Navigator.pop(context);
             },
+            child: const Text("SALVAR"),
           ),
-
-          const Divider(color: Colors.white24),
-          _buildMenuAction(icon: Icons.update_rounded, title: "Mudar Minha Posição", onTap: () => _abrirDialogoTrocarPosicao(context)),
-
-          const Divider(color: Colors.white24),
-
-          _buildMenuAction(
-            icon: Icons.add,
-            title: "Entrar em  novo Time",
-            onTap: () {
-              _mostrarDialogoEntrarTime(context);
-            },
-          ),
-
-          // Menus de Ação
-          const Divider(color: Colors.white24),
-
-          const SizedBox(height: 60),
-
-          // 4. Opções de Ação
-          ListTile(
-            leading: const Icon(Icons.logout, color: Colors.redAccent),
-            title: const Text("Sair do App", style: TextStyle(color: Colors.redAccent)),
-            onTap: () async {
-              if (context.mounted) {
-                Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (context) => LoginPage()), (route) => false);
-              }
-
-              // 2. Só então, deslogue do Firebase
-              await FirebaseAuth.instance.signOut();
-              // O AuthWrapper no main.dart cuidará do redirecionamento
-            },
-          ),
-          const SizedBox(height: 20),
         ],
       ),
     );
   }
 
+  Future<void> _configurarJanelaRecorrente(BuildContext context) async {
+    int? diaAbertura;
+    int? diaFechamento;
+
+    final List<String> dias = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
+
+    // 1. Selecionar Dia de Abertura (Pode usar um SimpleDialog ou Dropdown)
+    diaAbertura = await showDialog<int>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text("DIA DE ABERTURA"),
+        children: dias.asMap().entries.map((e) => SimpleDialogOption(onPressed: () => Navigator.pop(context, e.key + 1), child: Text(e.value))).toList(),
+      ),
+    );
+
+    if (diaAbertura == null) return;
+
+    // 2. Selecionar Hora de Abertura
+    TimeOfDay? horaAbertura = await showTimePicker(context: context, initialTime: const TimeOfDay(hour: 9, minute: 0));
+    if (horaAbertura == null) return;
+
+    // 3. Repetir para Fechamento...
+    diaFechamento = await showDialog<int>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text("DIA DE FECHAMENTO"),
+        children: dias.asMap().entries.map((e) => SimpleDialogOption(onPressed: () => Navigator.pop(context, e.key + 1), child: Text(e.value))).toList(),
+      ),
+    );
+
+    if (diaFechamento == null) return;
+
+    TimeOfDay? horaFechamento = await showTimePicker(context: context, initialTime: const TimeOfDay(hour: 18, minute: 0));
+    if (horaFechamento == null) return;
+
+    // 4. Salvar no Firebase
+    await FirebaseFirestore.instance.collection('organizacoes').doc(widget.orgIdAtual).update({
+      'abertura_dia': diaAbertura,
+      'abertura_hora': "${horaAbertura.hour}:${horaAbertura.minute.toString().padLeft(2, '0')}",
+      'fechamento_dia': diaFechamento,
+      'fechamento_hora': "${horaFechamento.hour}:${horaFechamento.minute.toString().padLeft(2, '0')}",
+    });
+  }
+
   Widget _buildMenuAction({required IconData icon, required String title, required VoidCallback onTap}) {
     return ListTile(
       visualDensity: VisualDensity.compact,
-      leading: Icon(icon, color: Colors.white70, size: 20),
+      leading: Icon(icon, color: Colors.yellow[700], size: 20),
       title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 16)),
       onTap: onTap,
     );
-  }
-
-  void _mostrarModalCompartilhar(BuildContext context, String nomeTime, String codigo) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.grey[900],
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(25.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 50,
-                height: 5,
-                decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)),
-              ),
-              const SizedBox(height: 20),
-              Text("Convidar para o Time", style: GoogleFonts.bebasNeue(fontSize: 25, color: Colors.white)),
-              const SizedBox(height: 10),
-              Text(
-                "Compartilhe o código abaixo com seus amigos para eles entrarem no $nomeTime",
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white70),
-              ),
-              const SizedBox(height: 30),
-
-              // Container do Código
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(15),
-                  border: Border.all(color: Colors.yellow[700]!, width: 1),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      codigo,
-                      style: GoogleFonts.sourceCodePro(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.yellow[700], letterSpacing: 5),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 30),
-
-              // Botão de fechar ou copiar (Opcional)
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.check, color: Colors.black),
-                  label: const Text(
-                    "ENTENDIDO",
-                    style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-                  ),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.yellow[700], padding: const EdgeInsets.symmetric(vertical: 15)),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  // Lógica para trocar de organização sem deslogar
-  void _alternarTime(BuildContext context, String novoOrgId) async {
-    final uid = FirebaseAuth.instance.currentUser!.uid;
-
-    // Atualiza a última acessada para que, ao abrir o app de novo, ele lembre desse time
-    await FirebaseFirestore.instance.collection('users_lookup').doc(uid).update({'ultima_org_acessada': novoOrgId});
-
-    if (context.mounted) {
-      // Reinicia para o AuthWrapper reconfigurar a Home com o novo ID
-      Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const AuthWrapper()), (route) => false);
-    }
   }
 
   void _mostrarDialogoEntrarTime(BuildContext context) {
@@ -405,6 +398,17 @@ class CustomDrawer extends StatelessWidget {
     try {
       // 1. Verificar se o time existe
       var orgDoc = await FirebaseFirestore.instance.collection('organizacoes').doc(codigo).get();
+      int limite = orgDoc['limite_jogadores'] ?? 6;
+
+      // 2. Contar quantos jogadores já existem na subcoleção
+      var jogadoresSnapshot = await orgDoc.reference.collection('jogadores').get();
+      int totalAtual = jogadoresSnapshot.docs.length;
+
+      if (totalAtual >= limite) {
+        // Bloqueia a entrada e avisa
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Este time atingiu o limite de jogadores. Fale com o organizador!")));
+        return;
+      }
 
       if (!orgDoc.exists) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Código inválido!")));
@@ -494,7 +498,7 @@ class CustomDrawer extends StatelessWidget {
                       final uid = FirebaseAuth.instance.currentUser!.uid;
 
                       // Atualiza na subcoleção do time específico
-                      await FirebaseFirestore.instance.collection('organizacoes').doc(orgIdAtual).collection('jogadores').doc(uid).update({'posicao': novaPosicao});
+                      await FirebaseFirestore.instance.collection('organizacoes').doc(widget.orgIdAtual).collection('jogadores').doc(uid).update({'posicao': novaPosicao});
 
                       if (context.mounted) {
                         Navigator.pop(context);
@@ -503,7 +507,7 @@ class CustomDrawer extends StatelessWidget {
                     },
               child: const Text(
                 "CONFIRMAR",
-                style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
               ),
             ),
           ],

@@ -13,6 +13,7 @@ class _CadastroPageState extends State<CadastroPage> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _apelidoController = TextEditingController();
 
   String? posicaoSelecionada;
   final List<String> posicoes = ['Goleiro', 'Zagueiro', 'Lateral', 'Meia', 'Atacante'];
@@ -28,6 +29,8 @@ class _CadastroPageState extends State<CadastroPage> {
         'email': _emailController.text.trim(),
         'data_cadastro': DateTime.now(),
         'posicao': posicaoSelecionada,
+        'apelido': _apelidoController.text.trim(), // Exemplo simples de apelido usando o primeiro nome
+        'is_admin': false, // Por padrão, o jogador não é admin
       });
 
       if (mounted) {
@@ -46,6 +49,12 @@ class _CadastroPageState extends State<CadastroPage> {
 
   @override
   Widget build(BuildContext context) {
+    final bool camposPreenchidos =
+        posicaoSelecionada != null &&
+        _nameController.text.trim().isNotEmpty &&
+        _emailController.text.trim().isNotEmpty &&
+        _passwordController.text.trim().isNotEmpty &&
+        _apelidoController.text.trim().isNotEmpty;
     return Scaffold(
       backgroundColor: Colors.green[900],
       appBar: AppBar(
@@ -70,6 +79,10 @@ class _CadastroPageState extends State<CadastroPage> {
               _buildField(controller: _nameController, hint: "Nome Completo", icon: Icons.person),
               SizedBox(height: 20),
 
+              // Campo Apelido
+              _buildField(controller: _apelidoController, hint: "Apelido", icon: Icons.tag),
+              SizedBox(height: 20),
+
               // Campo Email
               _buildField(controller: _emailController, hint: "E-mail de Contato", icon: Icons.email),
               SizedBox(height: 20),
@@ -84,17 +97,18 @@ class _CadastroPageState extends State<CadastroPage> {
 
               // Botão de Cadastro
               GestureDetector(
-                onTap: signUp,
+                onTap: camposPreenchidos == false ? null : () async => await signUp(),
                 child: Container(
                   height: 55,
                   decoration: BoxDecoration(
-                    color: Colors.yellow[700], // Cor de destaque (cartão amarelo/ouro)
+                    color: camposPreenchidos ? Colors.yellow[700] : Colors.grey[700], // Cor de destaque (cartão amarelo/ouro)
                     borderRadius: BorderRadius.circular(15),
+                    boxShadow: camposPreenchidos ? [BoxShadow(color: Colors.yellow[700]!.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))] : [],
                   ),
                   child: Center(
                     child: Text(
                       "ASSINAR CONTRATO",
-                      style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16),
+                      style: TextStyle(color: camposPreenchidos ? Colors.black : Colors.white24, fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                   ),
                 ),

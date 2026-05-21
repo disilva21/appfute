@@ -4,11 +4,20 @@ import 'package:google_fonts/google_fonts.dart';
 
 class PlacarPage extends StatelessWidget {
   final String partidaId;
-  const PlacarPage({super.key, required this.partidaId});
+  final String orgId;
+  const PlacarPage({super.key, required this.partidaId, required this.orgId});
 
   void _registrarGol(String uidJogador, String campoTime, int golsAtuais) async {
     // Atualiza o placar coletivo e a artilharia individual
     await FirebaseFirestore.instance.collection('partidas_ativas').doc(partidaId).update({campoTime: golsAtuais + 1});
+
+    // Agora apontamos para o jogador dentro da subcoleção da organização
+    await FirebaseFirestore.instance
+        .collection('organizacoes')
+        .doc(orgId) // ID da organização atual
+        .collection('jogadores')
+        .doc(uidJogador)
+        .update({'gols_carreira': FieldValue.increment(1)});
 
     await FirebaseFirestore.instance.collection('jogadores').doc(uidJogador).update({'gols_carreira': FieldValue.increment(1)});
   }
@@ -25,11 +34,11 @@ class PlacarPage extends StatelessWidget {
             style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
             onPressed: () async {
               // 1. Atualiza o status para sair da Home
-              await FirebaseFirestore.instance.collection('partidas_ativas').doc(partidaId).update({'status': 'finalizado'});
+              await FirebaseFirestore.instance.collection('partidas_ativas').doc(partidaId).update({'status': 'finalizado', 'data_fim': FieldValue.serverTimestamp()});
 
               // 2. Limpa a lista de presença para o próximo jogo
               // (Opcional: Se você quiser que a galera tenha que confirmar de novo no próximo dia)
-              var presencas = await FirebaseFirestore.instance.collection('presencas').get();
+              var presencas = await FirebaseFirestore.instance.collection('organizacoes').doc(orgId).collection('presencas').get();
               for (var doc in presencas.docs) {
                 await doc.reference.delete();
               }
@@ -51,7 +60,8 @@ class PlacarPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.grey[900],
       appBar: AppBar(
-        title: Text("PLACAR AO VIVO", style: GoogleFonts.bebasNeue()),
+        title: Text("PLACAR AO VIVO", style: GoogleFonts.bebasNeue(color: Colors.white)),
+        foregroundColor: Colors.white,
         backgroundColor: Colors.black,
         actions: [
           IconButton(
@@ -89,9 +99,9 @@ class PlacarPage extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _buildBoxPlacar("AZUL", golsAzul, Colors.blue),
+                    _buildBoxPlacar(data['nome_time_a'] ?? "AZUL", golsAzul, Colors.blue),
                     Text("VS", style: GoogleFonts.bebasNeue(fontSize: 30, color: Colors.white24)),
-                    _buildBoxPlacar("VERM", golsVermelho, Colors.red),
+                    _buildBoxPlacar(data['nome_time_b'] ?? "VERMELHO", golsVermelho, Colors.red),
                   ],
                 ),
               ),
@@ -102,9 +112,9 @@ class PlacarPage extends StatelessWidget {
               Expanded(
                 child: Row(
                   children: [
-                    _buildListaTime("TIME AZUL", jogadoresAzul, 'gols_total_azul', golsAzul),
+                    _buildListaTime(data['nome_time_a'] ?? "AZUL", jogadoresAzul, 'gols_total_azul', golsAzul),
                     const VerticalDivider(color: Colors.white10),
-                    _buildListaTime("TIME VERMELHO", jogadoresVermelho, 'gols_total_vermelho', golsVermelho),
+                    _buildListaTime(data['nome_time_b'] ?? "VERMELHO", jogadoresVermelho, 'gols_total_vermelho', golsVermelho),
                   ],
                 ),
               ),

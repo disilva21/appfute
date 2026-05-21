@@ -132,14 +132,23 @@ class _LoginPageState extends State<LoginPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SizedBox(height: 80),
-            Padding(
-              padding: EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text("AppFute Login", style: GoogleFonts.bebasNeue(fontSize: 50, color: Colors.white)),
-                  Text("Entre em campo para jogar", style: TextStyle(color: Colors.white, fontSize: 18)),
-                ],
+            Center(
+              child: Image.asset(
+                'assets/logo/logo_appfute.png', // Certifique-se de que o caminho está no pubspec.yaml
+                height: 150, // Ajuste o tamanho conforme necessário
+                fit: BoxFit.contain,
+              ),
+            ),
+            Center(
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Text("AppFute Login", style: GoogleFonts.bebasNeue(fontSize: 50, color: Colors.white)),
+                    Text("Entre em campo para jogar", style: TextStyle(color: Colors.white, fontSize: 18)),
+                  ],
+                ),
               ),
             ),
             Expanded(
