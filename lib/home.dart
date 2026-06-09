@@ -325,7 +325,7 @@ class _HomePageState extends State<HomePage> {
     final colecao = FirebaseFirestore.instance.collection('presencas');
     final snapshot = await colecao.get();
 
-    List<String> posicoes = ['Goleiro', 'Zagueiro', 'Meia', 'Atacante'];
+    List<String> posicoes = ['Goleiro', 'Zagueiro', 'Lateral', 'Volante', 'Meia', 'Atacante'];
 
     int contador = 0;
 
@@ -733,7 +733,7 @@ class _HomePageState extends State<HomePage> {
         final status = checarStatusRecorrente(dadosOrg);
 
         return FutureBuilder<DocumentSnapshot>(
-          future: FirebaseFirestore.instance.collection('jogadores').doc(user?.uid).get(),
+          future: FirebaseFirestore.instance.collection('organizacoes').doc(widget.orgId).collection('jogadores').doc(user?.uid).get(),
           builder: (context, userSnapshot) {
             bool isAdmin = false;
             if (userSnapshot.hasData && userSnapshot.data!.exists) {

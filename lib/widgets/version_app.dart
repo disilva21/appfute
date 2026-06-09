@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 class VersaoDoAppWidget extends StatelessWidget {
-  const VersaoDoAppWidget({super.key});
+  final Color? corTexto;
+  const VersaoDoAppWidget({super.key, required this.corTexto});
 
   @override
   Widget build(BuildContext context) {
@@ -19,7 +20,7 @@ class VersaoDoAppWidget extends StatelessWidget {
           // info.buildNumber = '1'
           return Text(
             "Versão ${info.version} (${info.buildNumber})",
-            style: TextStyle(fontSize: 12, color: Colors.white, fontStyle: FontStyle.italic),
+            style: TextStyle(fontSize: 12, color: corTexto ?? Colors.white, fontStyle: FontStyle.italic),
           );
         }
 

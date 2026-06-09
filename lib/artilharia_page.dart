@@ -10,7 +10,7 @@ class ArtilhariaPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[900],
+      backgroundColor: const Color(0xFF1B5E20),
       appBar: AppBar(
         title: Text("ARTILHARIA DO TIME", style: GoogleFonts.bebasNeue(letterSpacing: 1.5).copyWith(color: Colors.white)),
         backgroundColor: Colors.green[900],

@@ -95,23 +95,137 @@ class _GerenciarJogadoresPageState extends State<GerenciarJogadoresPage> {
             itemCount: jogadores.length,
             itemBuilder: (context, index) {
               var jogador = jogadores[index];
-              return Container(
+              return Card(
                 margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2E7D32), // Verde mais claro para o card
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                color: Colors.white.withOpacity(0.05),
                 child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: Colors.yellow[700],
-                    child: const Icon(Icons.person, color: Colors.black),
+                  leading: Container(
+                    width: 50,
+                    height: 50,
+                    // Mantém a estrutura circular para a borda ou fundo se necessário
+                    decoration: const BoxDecoration(shape: BoxShape.circle),
+                    child: ClipOval(
+                      child: jogador['urlFotoPerfil'] != null && jogador['urlFotoPerfil'] != ""
+                          ? Image.network(
+                              jogador['urlFotoPerfil'],
+                              width: 50,
+                              // Ajusta a foto ao tamanho do leading
+                            )
+                          : CircleAvatar(
+                              backgroundColor: Colors.yellow[700],
+                              child: const Icon(Icons.person, color: Colors.black),
+                            ),
+                    ),
                   ),
                   title: Text(jogador['nome'].toString().toUpperCase(), style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 18)),
-                  subtitle: Text(jogador['posicao'] ?? 'Sem posição', style: const TextStyle(color: Colors.white60)),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete_sweep, color: Colors.redAccent),
-                    onPressed: () => _excluirJogadorDaOrganizacao(jogador.id, jogador['nome']),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Apelido: ${jogador['apelido']}', style: const TextStyle(color: Colors.white60)),
+                      Text('Posição: ${jogador['posicao']}', style: const TextStyle(color: Colors.white60)),
+                    ],
                   ),
+                  trailing: jogador['is_admin'] == true && jogador['criador'] == true
+                      ? Text(
+                          "FUNDADOR",
+                          style: TextStyle(color: Colors.yellow[700], fontWeight: FontWeight.bold),
+                        )
+                      : PopupMenuButton<String>(
+                          icon: const Icon(Icons.more_vert, color: Colors.white),
+                          color: Colors.grey[900], // Fundo combinando com o tema escuro
+                          onSelected: (String acao) async {
+                            if (acao == 'mudar_admin') {
+                              // Inverte o status atual do jogador
+                              bool novoStatus = !(jogador['is_admin'] == true);
+                              await alternarAcessoAdmin(jogadorId: jogador['uid'], tornarAdmin: novoStatus);
+                            } else if (acao == 'remover') {
+                              // Sua função de remoção que já existe
+                              _excluirJogadorDaOrganizacao(jogador.id, jogador['nome']);
+                            }
+                          },
+                          itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                            // OPÇÃO 1: PROMOVER OU REBAIXAR ADMIN
+                            PopupMenuItem<String>(
+                              value: 'mudar_admin',
+                              child: Row(
+                                children: [
+                                  Icon(jogador['is_admin'] == true ? Icons.gavel_rounded : Icons.shield_rounded, color: Colors.yellow[700], size: 20),
+                                  const SizedBox(width: 10),
+                                  Text(jogador['is_admin'] == true ? "Remover Cargo de Gerente" : "Promover a Gerente", style: const TextStyle(color: Colors.white)),
+                                ],
+                              ),
+                            ),
+
+                            const PopupMenuDivider(), // Linha divisória fina
+                            // OPÇÃO 2: REMOVER DO TIME
+                            const PopupMenuItem<String>(
+                              value: 'remover',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.person_remove_rounded, color: Colors.red, size: 20),
+                                  SizedBox(width: 10),
+                                  Text("Remover do Time", style: TextStyle(color: Colors.red)),
+                                ],
+                              ),
+                            ),
+                          ],
+                          // SizedBox(
+                          //   child: Row(
+                          //     children: [
+                          //       Icon(jogador['is_admin'] == true ? Icons.gavel_rounded : Icons.shield_rounded, color: Colors.yellow[700], size: 20),
+                          //       const SizedBox(width: 10),
+                          //       Text(jogador['is_admin'] == true ? "Remover Admin" : "Tornar Admin", style: const TextStyle(color: Colors.white)),
+                          //       IconButton(
+                          //         icon: const Icon(Icons.delete_sweep, color: Colors.redAccent),
+                          //         onPressed: () => _excluirJogadorDaOrganizacao(jogador.id, jogador['nome']),
+                          //       ),
+                          //     ],
+                          //   ),
+                          // ),
+                        ),
+                  // trailing: jogador['is_admin'] == true
+                  //     ? Text('')
+                  //     : IconButton(
+                  //         icon: const Icon(Icons.delete_sweep, color: Colors.redAccent),
+                  //         onPressed: () => _excluirJogadorDaOrganizacao(jogador.id, jogador['nome']),
+                  //       ),
+
+                  // trailing: PopupMenuButton<String>(
+                  //   icon: const Icon(Icons.more_vert, color: Colors.white),
+                  //   color: Colors.grey[900], // Fundo combinando com o tema escuro
+                  //   onSelected: (String acao) async {
+                  //     if (acao == 'editar') {
+                  //     } else if (acao == 'remover') {
+                  //       _excluirJogadorDaOrganizacao(jogador.id, jogador['nome']);
+                  //     }
+                  //   },
+                  //   itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                  //     // OPÇÃO 1: PROMOVER OU REBAIXAR ADMIN
+                  //     PopupMenuItem<String>(
+                  //       value: 'editar',
+                  //       child: Row(
+                  //         children: [
+                  //           Icon(Icons.edit, color: Colors.yellow[700], size: 20),
+                  //           SizedBox(width: 10),
+                  //           Text("Editar", style: TextStyle(color: Colors.white)),
+                  //         ],
+                  //       ),
+                  //     ),
+
+                  //     const PopupMenuDivider(), // Linha divisória fina
+                  //     // OPÇÃO 2: REMOVER DO TIME
+                  //     PopupMenuItem<String>(
+                  //       value: 'remover',
+                  //       child: Row(
+                  //         children: [
+                  //           Icon(Icons.delete_sweep, color: Colors.redAccent, size: 20),
+                  //           SizedBox(width: 10),
+                  //           Text("Remover Jogador", style: TextStyle(color: Colors.white)),
+                  //         ],
+                  //       ),
+                  //     ),
+                  //   ],
+                  // ),
                 ),
               );
             },
@@ -119,5 +233,18 @@ class _GerenciarJogadoresPageState extends State<GerenciarJogadoresPage> {
         },
       ),
     );
+  }
+
+  Future<void> alternarAcessoAdmin({required String jogadorId, required bool tornarAdmin}) async {
+    try {
+      await FirebaseFirestore.instance.collection('organizacoes').doc(widget.orgId).collection('jogadores').doc(jogadorId).update({
+        'is_admin': tornarAdmin,
+        'alteradoEm': FieldValue.serverTimestamp(),
+      });
+
+      print("Permissões atualizadas com sucesso!");
+    } catch (e) {
+      print("Erro ao mudar permissões: $e");
+    }
   }
 }

@@ -16,9 +16,38 @@ class _CadastroPageState extends State<CadastroPage> {
   final _apelidoController = TextEditingController();
 
   String? posicaoSelecionada;
-  final List<String> posicoes = ['Goleiro', 'Zagueiro', 'Lateral', 'Meia', 'Atacante'];
+  final List<String> posicoes = ['Goleiro', 'Zagueiro', 'Lateral', 'Volante', 'Meia', 'Atacante'];
+
+  // 🌟 VARIÁVEL DE CONTROLE DE LOADING
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Adiciona ouvintes para atualizar o estado do botão dinamicamente ao digitar
+    _nameController.addListener(_atualizarEstado);
+    _emailController.addListener(_atualizarEstado);
+    _passwordController.addListener(_atualizarEstado);
+    _apelidoController.addListener(_atualizarEstado);
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _apelidoController.dispose();
+    super.dispose();
+  }
+
+  void _atualizarEstado() {
+    setState(() {});
+  }
 
   Future signUp() async {
+    // 🛡️ Ativa o loading e trava o clique duplo
+    setState(() => _isLoading = true);
+
     try {
       // Cria o usuário no Firebase Auth
       UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(email: _emailController.text.trim(), password: _passwordController.text.trim());
@@ -29,21 +58,21 @@ class _CadastroPageState extends State<CadastroPage> {
         'email': _emailController.text.trim(),
         'data_cadastro': DateTime.now(),
         'posicao': posicaoSelecionada,
-        'apelido': _apelidoController.text.trim(), // Exemplo simples de apelido usando o primeiro nome
-        'is_admin': false, // Por padrão, o jogador não é admin
+        'apelido': _apelidoController.text.trim(),
       });
 
       if (mounted) {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const AuthWrapper()),
-          (route) => false, // Remove todas as telas anteriores da pilha
-        );
+        Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const AuthWrapper()), (route) => false);
       }
-
-      // Navigator.pop(context); // Volta para o login após o sucesso
     } on FirebaseAuthException catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message ?? "Erro ao escalar jogador")));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message ?? "Erro ao escalar jogador")));
+      }
+    } finally {
+      // 🛡️ Desativa o loading caso ocorra um erro para o usuário tentar novamente
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -55,64 +84,78 @@ class _CadastroPageState extends State<CadastroPage> {
         _emailController.text.trim().isNotEmpty &&
         _passwordController.text.trim().isNotEmpty &&
         _apelidoController.text.trim().isNotEmpty;
+
+    // O botão só fica clicável se todos os campos estiverem preenchidos E não estiver carregando
+    final bool botaoHabilitado = camposPreenchidos && !_isLoading;
+
     return Scaffold(
       backgroundColor: Colors.green[900],
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.white),
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
       ),
       body: SingleChildScrollView(
         child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 30),
+          padding: const EdgeInsets.symmetric(horizontal: 30),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text("Novo Contrato", style: GoogleFonts.bebasNeue(fontSize: 45, color: Colors.white)),
-              Text("Preencha seus dados para entrar no time", style: TextStyle(color: Colors.white70, fontSize: 16)),
-              SizedBox(height: 40),
+              const Text("Preencha seus dados para entrar no time", style: TextStyle(color: Colors.white70, fontSize: 16)),
+              const SizedBox(height: 40),
 
               // Campo Nome
               _buildField(controller: _nameController, hint: "Nome Completo", icon: Icons.person),
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
 
               // Campo Apelido
               _buildField(controller: _apelidoController, hint: "Apelido", icon: Icons.tag),
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
 
               // Campo Email
               _buildField(controller: _emailController, hint: "E-mail de Contato", icon: Icons.email),
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
 
               // Campo Senha
               _buildField(controller: _passwordController, hint: "Senha de Acesso", icon: Icons.lock, isObscure: true),
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
 
-              _buildFieldPos(controller: _passwordController, hint: "Posição em Campo", icon: Icons.sports_soccer),
+              _buildFieldPos(hint: "Posição em Campo", icon: Icons.sports_soccer),
 
-              SizedBox(height: 50),
+              const SizedBox(height: 50),
 
-              // Botão de Cadastro
+              // ⚽ Botão de Cadastro com Tratamento de Loading
               GestureDetector(
-                onTap: camposPreenchidos == false ? null : () async => await signUp(),
+                onTap: botaoHabilitado ? () async => await signUp() : null,
                 child: Container(
                   height: 55,
                   decoration: BoxDecoration(
-                    color: camposPreenchidos ? Colors.yellow[700] : Colors.grey[700], // Cor de destaque (cartão amarelo/ouro)
+                    color: botaoHabilitado ? Colors.yellow[700] : Colors.grey[700],
                     borderRadius: BorderRadius.circular(15),
-                    boxShadow: camposPreenchidos ? [BoxShadow(color: Colors.yellow[700]!.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))] : [],
+                    boxShadow: botaoHabilitado ? [BoxShadow(color: Colors.yellow[700]!.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))] : [],
                   ),
                   child: Center(
-                    child: Text(
-                      "ASSINAR CONTRATO",
-                      style: TextStyle(color: camposPreenchidos ? Colors.black : Colors.white24, fontWeight: FontWeight.bold, fontSize: 16),
-                    ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              color: Colors.black, // Combina com o contraste do fundo amarelo
+                              strokeWidth: 2.5,
+                            ),
+                          )
+                        : Text(
+                            "ASSINAR CONTRATO",
+                            style: TextStyle(color: botaoHabilitado ? Colors.black : Colors.white24, fontWeight: FontWeight.bold, fontSize: 16),
+                          ),
                   ),
                 ),
               ),
+              const SizedBox(height: 30),
             ],
           ),
         ),
@@ -122,7 +165,7 @@ class _CadastroPageState extends State<CadastroPage> {
 
   Widget _buildField({required TextEditingController controller, required String hint, required IconData icon, bool isObscure = false}) {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 15),
+      padding: const EdgeInsets.symmetric(horizontal: 15),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.1),
         borderRadius: BorderRadius.circular(15),
@@ -131,37 +174,35 @@ class _CadastroPageState extends State<CadastroPage> {
       child: TextField(
         controller: controller,
         obscureText: isObscure,
-        style: TextStyle(color: Colors.white),
+        style: const TextStyle(color: Colors.white),
         decoration: InputDecoration(
           icon: Icon(icon, color: Colors.yellow[700]),
           hintText: hint,
-          hintStyle: TextStyle(color: Colors.white54),
+          hintStyle: const TextStyle(color: Colors.white54),
           border: InputBorder.none,
         ),
       ),
     );
   }
 
-  Widget _buildFieldPos({required TextEditingController controller, required String hint, required IconData icon, bool isObscure = false}) {
+  Widget _buildFieldPos({required String hint, required IconData icon}) {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 15),
+      padding: const EdgeInsets.symmetric(horizontal: 15),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.1),
         borderRadius: BorderRadius.circular(15),
         border: Border.all(color: Colors.white24),
       ),
       child: DropdownButtonFormField<String>(
-        decoration: InputDecoration(
+        decoration: const InputDecoration(
           labelText: 'Em que posição você joga?',
-          labelStyle: const TextStyle(color: Colors.white70), // Cor da label quando parada
-          floatingLabelStyle: const TextStyle(color: Colors.white), // Cor da label quando sobe
-          border: InputBorder.none, // Remove a linha padrão para usar a do Container
+          labelStyle: TextStyle(color: Colors.white70),
+          floatingLabelStyle: TextStyle(color: Colors.white),
+          border: InputBorder.none,
         ),
-        // 2. Estilo do texto selecionado dentro do campo
         style: const TextStyle(color: Colors.white, fontSize: 16),
-        // 3. Cor do ícone de seta e do fundo do menu suspenso
         iconEnabledColor: Colors.white,
-        dropdownColor: Colors.grey[850], // Cor de fundo da lista que abre
+        dropdownColor: Colors.grey[850],
         value: posicaoSelecionada,
         items: posicoes
             .map(
@@ -171,7 +212,7 @@ class _CadastroPageState extends State<CadastroPage> {
               ),
             )
             .toList(),
-        onChanged: (value) => setState(() => posicaoSelecionada = value),
+        onChanged: _isLoading ? null : (value) => setState(() => posicaoSelecionada = value),
         validator: (value) => value == null ? 'Selecione uma posição' : null,
       ),
     );

@@ -47,6 +47,9 @@ class _EntrarTimePageState extends State<EntrarTimePage> {
         'gols_carreira': 0,
         'is_admin': false,
         'uid': user.uid,
+        'criador': false,
+        'apelido': jogadorRoot['apelido'],
+        'urlFotoPerfil': jogadorRoot['urlFotoPerfil'],
       });
 
       // 4. Sucesso! Vai para a Home

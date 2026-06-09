@@ -1,3 +1,4 @@
+import 'package:appfute/agenda_jogos.dart';
 import 'package:appfute/gerenciar_jogador.dart';
 import 'package:appfute/meus_times.dart';
 import 'package:appfute/upgrade_page.dart';
@@ -26,15 +27,29 @@ class _CustomDrawerState extends State<CustomDrawer> {
   bool _carregandoImagem = false;
   final UploadService _uploadService = UploadService();
 
+  // 🚀 Função de upload ajustada para o fluxo nativo do usuário
   void _atualizarEscudo() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
     setState(() => _carregandoImagem = true);
 
-    // Geramos um ID temporário ou usamos o ID do time se já existir
-    String idTemporarioTime = DateTime.now().millisecondsSinceEpoch.toString();
+    try {
+      // Faz o upload usando o UID do jogador como nome do arquivo
+      String? novaUrl = await _uploadService.selecionarEUpload(pasta: 'perfil', idDocumento: user.uid);
 
-    await _uploadService.selecionarEUpload(pasta: 'perfil', idDocumento: idTemporarioTime);
+      if (novaUrl != null && novaUrl.isNotEmpty) {
+        // 1. Atualiza na subcoleção do time atual
+        await FirebaseFirestore.instance.collection('organizacoes').doc(widget.orgIdAtual).collection('jogadores').doc(user.uid).update({'urlFotoPerfil': novaUrl});
 
-    setState(() => _carregandoImagem = false);
+        // 2. Atualiza na coleção global para manter sincronizado
+        await FirebaseFirestore.instance.collection('jogadores').doc(user.uid).update({'urlFotoPerfil': novaUrl});
+      }
+    } catch (e) {
+      print("Erro ao atualizar foto de perfil: $e");
+    } finally {
+      setState(() => _carregandoImagem = false);
+    }
   }
 
   @override
@@ -44,140 +59,173 @@ class _CustomDrawerState extends State<CustomDrawer> {
 
     return Drawer(
       backgroundColor: const Color.fromARGB(255, 22, 66, 24),
-      child: FutureBuilder<DocumentSnapshot>(
-        future: FirebaseFirestore.instance.collection('jogadores').doc(user?.uid).get(),
+      // 🚀 Alterado para StreamBuilder: reage instantaneamente quando mudar de time
+      child: StreamBuilder<DocumentSnapshot>(
+        stream: FirebaseFirestore.instance.collection('organizacoes').doc(widget.orgIdAtual).collection('jogadores').doc(user?.uid).snapshots(),
         builder: (context, snapshot) {
-          // Enquanto carrega, podemos mostrar um loading ou o header vazio
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator(color: Colors.white));
+          }
 
-          // 1. Pegamos os dados como um Mapa
+          if (!snapshot.hasData || !snapshot.data!.exists) {
+            return Center(
+              child: Column(
+                children: [
+                  Text("Dados não encontrados para este time.", style: TextStyle(color: Colors.white)),
+                  ListTile(
+                    leading: const Icon(Icons.logout, color: Colors.redAccent),
+                    title: const Text("Sair do App", style: TextStyle(color: Colors.redAccent)),
+                    onTap: () async {
+                      await FirebaseAuth.instance.signOut();
+                      if (context.mounted) {
+                        Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (context) => LoginPage()), (route) => false);
+                      }
+                    },
+                  ),
+                ],
+              ),
+            );
+          }
+
           final dados = snapshot.data!.data() as Map<String, dynamic>?;
 
-          // 2. Verificamos se o mapa contém a chave e se o valor é true
           if (dados != null && dados.containsKey('is_admin')) {
             isAdmin = dados['is_admin'] == true;
           } else {
-            isAdmin = false; // Se o campo não existe, ele definitivamente não é admin
+            isAdmin = false;
           }
-          final nome = dados!['nome'] ?? "Jogador";
-          final email = dados['email'] ?? "Sem email";
-          String? urlFotoPerfil = dados['urlFotoPerfil'] ?? null;
 
-          return Column(
-            children: [
-              // 1. Cabeçalho com dados do Usuário (da coleção raiz 'jogadores')
-              UserAccountsDrawerHeader(
-                decoration: BoxDecoration(color: Colors.green[900]),
-                currentAccountPicture: GestureDetector(
-                  onTap: _carregandoImagem ? null : _atualizarEscudo,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      CircleAvatar(
-                        radius: 60,
-                        backgroundColor: Colors.grey[200],
-                        backgroundImage: urlFotoPerfil != null ? NetworkImage(urlFotoPerfil) : null,
-                        child: urlFotoPerfil == null ? const Icon(Icons.shield, size: 50, color: Colors.grey) : null,
-                      ),
-                      if (_carregandoImagem)
-                        const CircleAvatar(
+          final nome = dados?['nome'] ?? "Jogador";
+          final email = user?.email ?? "Sem email";
+          String? urlFotoPerfil = dados?['urlFotoPerfil'];
+
+          return SingleChildScrollView(
+            child: Column(
+              children: [
+                UserAccountsDrawerHeader(
+                  decoration: BoxDecoration(color: Colors.green[900]),
+                  currentAccountPicture: GestureDetector(
+                    onTap: _carregandoImagem ? null : _atualizarEscudo,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        CircleAvatar(
                           radius: 60,
-                          backgroundColor: Colors.black45,
-                          child: CircularProgressIndicator(color: Colors.white),
+                          backgroundColor: Colors.grey[200],
+                          backgroundImage: urlFotoPerfil != null && urlFotoPerfil.isNotEmpty ? NetworkImage(urlFotoPerfil) : null,
+                          child: urlFotoPerfil == null || urlFotoPerfil.isEmpty ? const Icon(Icons.person, size: 40, color: Colors.grey) : null,
                         ),
-                      if (!_carregandoImagem)
-                        Positioned(
-                          bottom: 0,
-                          right: 0,
-                          child: CircleAvatar(
-                            radius: 12,
-                            backgroundColor: Theme.of(context).primaryColor,
-                            child: const Icon(Icons.camera_alt, size: 12, color: Colors.white),
+                        if (_carregandoImagem)
+                          const CircleAvatar(
+                            radius: 60,
+                            backgroundColor: Colors.black45,
+                            child: CircularProgressIndicator(color: Colors.white),
                           ),
-                        ),
-                    ],
+                        if (!_carregandoImagem)
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: CircleAvatar(
+                              radius: 12,
+                              backgroundColor: Theme.of(context).primaryColor,
+                              child: const Icon(Icons.camera_alt, size: 12, color: Colors.white),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
+                  accountName: Text(nome, style: GoogleFonts.bebasNeue(fontSize: 16)),
+                  accountEmail: Text(email),
                 ),
 
-                accountName: Text(nome, style: GoogleFonts.bebasNeue(fontSize: 16)),
-                accountEmail: Text(email),
-              ),
-
-              _buildMenuAction(
-                icon: Icons.shield_rounded,
-                title: "Meus Times",
-                onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (context) => MeusTimesPage(orgIdAtual: widget.orgIdAtual)));
-                },
-              ),
-
-              const Divider(color: Colors.white24),
-
-              _buildMenuAction(
-                icon: Icons.sports_soccer_rounded,
-                title: "Artilharia do Time",
-                onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (context) => ArtilhariaPage(orgId: widget.orgIdAtual)));
-                },
-              ),
-
-              const Divider(color: Colors.white24),
-              _buildMenuAction(icon: Icons.update_rounded, title: "Mudar Minha Posição", onTap: () => _abrirDialogoTrocarPosicao(context)),
-
-              if (isAdmin == true) const Divider(color: Colors.white24),
-              if (isAdmin == true) _buildMenuAction(icon: Icons.calendar_month_outlined, title: "Agendar Janela da Lista", onTap: () => _configurarJanelaRecorrente(context)),
-
-              if (isAdmin == true) const Divider(color: Colors.white24),
-              if (isAdmin == true) _buildMenuAction(icon: Icons.confirmation_number_outlined, title: "Definir Vagas da Partida", onTap: () => _mostrarAjusteVagas(context)),
-
-              if (isAdmin == true) const Divider(color: Colors.white24),
-              if (isAdmin == true)
                 _buildMenuAction(
-                  icon: Icons.rocket_launch,
-                  title: "Fazer Upgrade do Time",
+                  icon: Icons.shield_rounded,
+                  title: "Meus Times",
                   onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => UpgradePage(orgId: widget.orgIdAtual)));
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => MeusTimesPage(orgIdAtual: widget.orgIdAtual)));
                   },
                 ),
 
-              if (isAdmin == true) const Divider(color: Colors.white24),
-              if (isAdmin == true)
+                const Divider(color: Colors.white24),
+
                 _buildMenuAction(
-                  icon: Icons.group_remove,
-                  title: "Gerenciar Atletas",
+                  icon: Icons.sports_soccer_rounded,
+                  title: "Artilharia do Time",
                   onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => GerenciarJogadoresPage(orgId: widget.orgIdAtual)));
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => ArtilhariaPage(orgId: widget.orgIdAtual)));
                   },
                 ),
-              // Dentro da Column do seu CustomDrawer
-              const Divider(color: Colors.white24),
 
-              _buildMenuAction(
-                icon: Icons.add,
-                title: "Entrar em  novo Time",
-                onTap: () {
-                  _mostrarDialogoEntrarTime(context);
-                },
-              ),
+                const Divider(color: Colors.white24),
+                _buildMenuAction(icon: Icons.update_rounded, title: "Mudar Minha Posição", onTap: () => _abrirDialogoTrocarPosicao(context)),
 
-              // Menus de Ação
-              const Divider(color: Colors.white24),
+                if (isAdmin == true) const Divider(color: Colors.white24),
+                if (isAdmin == true) _buildMenuAction(icon: Icons.calendar_month_outlined, title: "Agendar Janela da Lista", onTap: () => _configurarJanelaRecorrente(context)),
 
-              // 4. Opções de Ação
-              ListTile(
-                leading: const Icon(Icons.logout, color: Colors.redAccent),
-                title: const Text("Sair do App", style: TextStyle(color: Colors.redAccent)),
-                onTap: () async {
-                  await FirebaseAuth.instance.signOut();
-                  if (context.mounted) {
-                    Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (context) => LoginPage()), (route) => false);
-                  }
-                },
-              ),
+                if (isAdmin == true) const Divider(color: Colors.white24),
+                if (isAdmin == true) _buildMenuAction(icon: Icons.confirmation_number_outlined, title: "Definir Vagas da Partida", onTap: () => _mostrarAjusteVagas(context)),
 
-              const Divider(color: Colors.white24),
-              const Padding(padding: EdgeInsets.only(bottom: 5.0), child: VersaoDoAppWidget()),
-            ],
+                if (isAdmin == true) const Divider(color: Colors.white24),
+
+                if (isAdmin == true)
+                  _buildMenuAction(
+                    icon: Icons.calendar_month_outlined,
+                    title: "Agenda de Jogos",
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => AgendaJogosPage(organizacaoId: widget.orgIdAtual, isAdmin: isAdmin),
+                        ),
+                      );
+                    },
+                  ),
+                if (isAdmin == true) const Divider(color: Colors.white24),
+                if (isAdmin == true)
+                  _buildMenuAction(
+                    icon: Icons.rocket_launch,
+                    title: "Fazer Upgrade do Time",
+                    onTap: () {
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => UpgradePage(orgId: widget.orgIdAtual)));
+                    },
+                  ),
+
+                if (isAdmin == true) const Divider(color: Colors.white24),
+                if (isAdmin == true)
+                  _buildMenuAction(
+                    icon: Icons.group_remove,
+                    title: "Gerenciar Atletas",
+                    onTap: () {
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => GerenciarJogadoresPage(orgId: widget.orgIdAtual)));
+                    },
+                  ),
+                const Divider(color: Colors.white24),
+
+                _buildMenuAction(
+                  icon: Icons.add,
+                  title: "Entrar em novo Time",
+                  onTap: () {
+                    _mostrarDialogoEntrarTime(context);
+                  },
+                ),
+
+                const Divider(color: Colors.white24),
+
+                ListTile(
+                  leading: const Icon(Icons.logout, color: Colors.redAccent),
+                  title: const Text("Sair do App", style: TextStyle(color: Colors.redAccent)),
+                  onTap: () async {
+                    await FirebaseAuth.instance.signOut();
+                    if (context.mounted) {
+                      Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (context) => LoginPage()), (route) => false);
+                    }
+                  },
+                ),
+
+                const Divider(color: Colors.white24),
+                const Padding(padding: EdgeInsets.only(bottom: 5.0), child: VersaoDoAppWidget(corTexto: null)),
+              ],
+            ),
           );
         },
       ),
@@ -223,7 +271,6 @@ class _CustomDrawerState extends State<CustomDrawer> {
 
     final List<String> dias = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
 
-    // 1. Selecionar Dia de Abertura (Pode usar um SimpleDialog ou Dropdown)
     diaAbertura = await showDialog<int>(
       context: context,
       builder: (context) => SimpleDialog(
@@ -234,11 +281,9 @@ class _CustomDrawerState extends State<CustomDrawer> {
 
     if (diaAbertura == null) return;
 
-    // 2. Selecionar Hora de Abertura
     TimeOfDay? horaAbertura = await showTimePicker(context: context, initialTime: const TimeOfDay(hour: 9, minute: 0));
     if (horaAbertura == null) return;
 
-    // 3. Repetir para Fechamento...
     diaFechamento = await showDialog<int>(
       context: context,
       builder: (context) => SimpleDialog(
@@ -252,7 +297,6 @@ class _CustomDrawerState extends State<CustomDrawer> {
     TimeOfDay? horaFechamento = await showTimePicker(context: context, initialTime: const TimeOfDay(hour: 18, minute: 0));
     if (horaFechamento == null) return;
 
-    // 4. Salvar no Firebase
     await FirebaseFirestore.instance.collection('organizacoes').doc(widget.orgIdAtual).update({
       'abertura_dia': diaAbertura,
       'abertura_hora': "${horaAbertura.hour}:${horaAbertura.minute.toString().padLeft(2, '0')}",
@@ -273,19 +317,17 @@ class _CustomDrawerState extends State<CustomDrawer> {
   void _mostrarDialogoEntrarTime(BuildContext context) {
     final TextEditingController _codigoController = TextEditingController();
     String? posicaoSelecionada;
-    final List<String> posicoes = ['Goleiro', 'Zagueiro', 'Lateral', 'Meia', 'Atacante'];
+    final List<String> posicoes = ['Goleiro', 'Zagueiro', 'Lateral', 'Volante', 'Meia', 'Atacante'];
 
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true, // Permite que a modal suba quando o teclado abrir
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => Container(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom, // Ajuste para o teclado
-          ),
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
           decoration: BoxDecoration(
-            color: Colors.green[900], // Identidade visual verde escuro
+            color: Colors.green[900],
             borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
           ),
           child: SingleChildScrollView(
@@ -294,7 +336,6 @@ class _CustomDrawerState extends State<CustomDrawer> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Barra de arraste
                 Center(
                   child: Container(
                     width: 50,
@@ -308,11 +349,9 @@ class _CustomDrawerState extends State<CustomDrawer> {
                 const Text("Digite o código do time para entrar em campo", style: TextStyle(color: Colors.white70, fontSize: 16)),
                 const SizedBox(height: 30),
 
-                // Campo de Código Estilizado
                 _buildModalField(controller: _codigoController, hint: "CÓDIGO DO TIME", icon: Icons.qr_code, upperCase: true),
                 const SizedBox(height: 20),
 
-                // Dropdown de Posição Estilizado
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 15),
                   decoration: BoxDecoration(
@@ -324,14 +363,12 @@ class _CustomDrawerState extends State<CustomDrawer> {
                     dropdownColor: Colors.grey[850],
                     style: const TextStyle(color: Colors.white, fontSize: 16),
                     iconEnabledColor: Colors.white,
-
-                    decoration: InputDecoration(
+                    decoration: const InputDecoration(
                       labelText: 'SUA POSIÇÃO',
-                      labelStyle: const TextStyle(color: Colors.white70), // Cor da label quando parada
-                      floatingLabelStyle: const TextStyle(color: Colors.white), // Cor da label quando sobe
-                      border: InputBorder.none, // Remove a linha padrão para usar a do Container
+                      labelStyle: TextStyle(color: Colors.white70),
+                      floatingLabelStyle: TextStyle(color: Colors.white),
+                      border: InputBorder.none,
                     ),
-
                     items: posicoes
                         .map(
                           (p) => DropdownMenuItem(
@@ -345,7 +382,6 @@ class _CustomDrawerState extends State<CustomDrawer> {
                 ),
                 const SizedBox(height: 40),
 
-                // Botão de Ação Estilizado (Amarelo)
                 GestureDetector(
                   onTap: () => _processarEntradaNoTime(context, _codigoController.text.trim(), posicaoSelecionada),
                   child: Container(
@@ -378,7 +414,6 @@ class _CustomDrawerState extends State<CustomDrawer> {
       ),
       child: TextField(
         controller: controller,
-        // Usamos formatters em vez de onChanged para manipular o texto
         inputFormatters: [if (upperCase) UpperCaseTextFormatter(), LengthLimitingTextInputFormatter(6)],
         style: const TextStyle(color: Colors.white),
         decoration: InputDecoration(
@@ -396,45 +431,39 @@ class _CustomDrawerState extends State<CustomDrawer> {
     final user = FirebaseAuth.instance.currentUser;
 
     try {
-      // 1. Verificar se o time existe
       var orgDoc = await FirebaseFirestore.instance.collection('organizacoes').doc(codigo).get();
-      int limite = orgDoc['limite_jogadores'] ?? 6;
-
-      // 2. Contar quantos jogadores já existem na subcoleção
-      var jogadoresSnapshot = await orgDoc.reference.collection('jogadores').get();
-      int totalAtual = jogadoresSnapshot.docs.length;
-
-      if (totalAtual >= limite) {
-        // Bloqueia a entrada e avisa
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Este time atingiu o limite de jogadores. Fale com o organizador!")));
-        return;
-      }
-
       if (!orgDoc.exists) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Código inválido!")));
         return;
       }
 
-      // 2. Buscar dados globais do jogador (daquela nossa coleção raiz 'jogadores')
+      int limite = orgDoc['limite_jogadores'] ?? 6;
+      var jogadoresSnapshot = await orgDoc.reference.collection('jogadores').get();
+      int totalAtual = jogadoresSnapshot.docs.length;
+
+      if (totalAtual >= limite) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Este time atingiu o limite de jogadores. Fale com o organizador!")));
+        return;
+      }
+
       var userGlobal = await FirebaseFirestore.instance.collection('jogadores').doc(user!.uid).get();
 
-      // 3. Adicionar o jogador à SUBCOLEÇÃO do novo time
       await orgDoc.reference.collection('jogadores').doc(user.uid).set({
         'nome': userGlobal['nome'],
         'posicao': posicao,
         'gols_carreira': 0,
-        'is_admin': false, // Novo membro não entra como admin por padrão
+        'is_admin': false,
         'uid': user.uid,
+        'criador': false,
+        'apelido': userGlobal['apelido'],
+        'urlFotoPerfil': userGlobal['urlFotoPerfil'],
       });
 
-      // 4. ATUALIZAR O LOOKUP (O segredo do Multi-Tenant)
-      // Aqui usamos arrayUnion para não apagar os times que ele já tinha!
       await FirebaseFirestore.instance.collection('users_lookup').doc(user.uid).set({
         'organizacoes': FieldValue.arrayUnion([codigo]),
         'ultima_org_acessada': codigo,
       }, SetOptions(merge: true));
 
-      // 5. Resetar o app para a Home do novo time
       if (context.mounted) {
         Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const AuthWrapper()), (route) => false);
       }
@@ -445,7 +474,7 @@ class _CustomDrawerState extends State<CustomDrawer> {
 
   void _abrirDialogoTrocarPosicao(BuildContext context) {
     String? novaPosicao;
-    final List<String> posicoes = ['Goleiro', 'Zagueiro', 'Lateral', 'Meia', 'Atacante'];
+    final List<String> posicoes = ['Goleiro', 'Zagueiro', 'Lateral', 'Volante', 'Meia', 'Atacante'];
 
     showDialog(
       context: context,
@@ -497,12 +526,11 @@ class _CustomDrawerState extends State<CustomDrawer> {
                   : () async {
                       final uid = FirebaseAuth.instance.currentUser!.uid;
 
-                      // Atualiza na subcoleção do time específico
                       await FirebaseFirestore.instance.collection('organizacoes').doc(widget.orgIdAtual).collection('jogadores').doc(uid).update({'posicao': novaPosicao});
 
                       if (context.mounted) {
                         Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Posição atualizada com sucesso!")));
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Posição updated com sucesso!")));
                       }
                     },
               child: const Text(

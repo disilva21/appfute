@@ -64,7 +64,6 @@ class _CadastroOrganizacaoPageState extends State<CadastroOrganizacaoPage> {
       // 3. Salvar os dados da organização (Documento Pai)
       await orgRef.set({
         'nome': _nomeController.text.trim(),
-
         'codigo_acesso': orgId,
         'criador_uid': user.uid,
         'limite_jogadores': quantidadeSelecionada,
@@ -87,8 +86,10 @@ class _CadastroOrganizacaoPageState extends State<CadastroOrganizacaoPage> {
         'posicao': jogadorRoot['posicao'], // Certifique-se de pegar a variável do Dropdown
         'gols_carreira': 0,
         'is_admin': true,
+        'criador': true,
         'apelido': jogadorRoot['apelido'],
-        'uid': user.uid, // Guardar o UID dentro do doc também ajuda em buscas
+        'uid': user.uid,
+        'urlFotoPerfil': '',
       });
 
       // 5. Vincular o usuário no mapa global de acesso (users_lookup)
